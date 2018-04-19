@@ -436,7 +436,7 @@ public class BlogEngine {
             BlogEntry be = null;
             try {
                 final FileInputStream in = new FileInputStream(blogfile);
-                be = BlogEntry.loadDataFromBlog(in, this.config);
+                be = BlogEntry.loadDataFromBlog(in);
                 in.close();
             } catch (Exception e) {
                 e.printStackTrace();
