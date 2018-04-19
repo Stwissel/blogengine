@@ -29,10 +29,22 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Arrays;
 
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Document.OutputSettings;
+import org.jsoup.nodes.Document.OutputSettings.Syntax;
+import org.jsoup.nodes.Entities.EscapeMode;
+
+import com.google.common.base.Charsets;
 import com.google.common.io.Closeables;
 import com.google.common.io.Files;
 
 /**
+ * Specialized Output Stream for Blog handling
+ * It cleans a HTML Stream that was written to it to make it pretty
+ * and only saves when the content of an eventual existing file
+ * has changed bytes compared to the content written to this Stream
+ * 
  * @author swissel
  *
  */
@@ -40,17 +52,17 @@ public class BlogOutput extends OutputStream {
 
     private static final int            OUT_SIZE = 102400;
     private final ByteArrayOutputStream out;
-    private final String                location;
+    private final String                outputFileName;
     private final boolean cleanupHTML;
 
-    public BlogOutput(final String location) {
-        this.location = location;
+    public BlogOutput(final String fileName) {
+        this.outputFileName = fileName;
         this.cleanupHTML = false;
         this.out = new ByteArrayOutputStream(BlogOutput.OUT_SIZE);
     }
     
     public BlogOutput(final String location, final boolean cleanupHTML) {
-        this.location = location;
+        this.outputFileName = location;
         this.cleanupHTML = cleanupHTML;
         this.out = new ByteArrayOutputStream(BlogOutput.OUT_SIZE);
     }
@@ -84,16 +96,24 @@ public class BlogOutput extends OutputStream {
     
     private byte[] getBytesToSave() {
         if (this.cleanupHTML) {
-            System.out.println("html cleanup");
-        }
-        //FIXME: HTML Proetty please!
-        return this.out.toByteArray();
+            // Make really pretty HTML
+            Document htmlDoc = Jsoup.parse(new String(this.out.toByteArray(),Charsets.UTF_8));
+            OutputSettings outputSettings = new OutputSettings();
+            outputSettings.indentAmount(4);
+            outputSettings.escapeMode(EscapeMode.extended);
+            outputSettings.prettyPrint(true);
+            outputSettings.syntax(Syntax.xml);
+            htmlDoc.outputSettings(outputSettings);
+            return htmlDoc.outerHtml().getBytes();
+        } else {
+            return this.out.toByteArray();
+        }        
     }
     
     private boolean isSaveRequired(final byte[] payload) {
-        final File targetFile = new File(this.location);
+        final File targetFile = new File(this.outputFileName);
         if (targetFile.isDirectory()) {
-            System.err.println("Directory encountered!" + this.location);
+            System.err.println("Directory encountered!" + this.outputFileName);
             return false;
         }
         boolean saveThis = true;
@@ -119,13 +139,14 @@ public class BlogOutput extends OutputStream {
      * @return true if it has been saved - false if not
      */
     private boolean save() {
-        if(this.isSaveRequired(this.getBytesToSave())) {
-            final File targetFile = new File(this.location);
+        final byte[] saveCandidate = this.getBytesToSave();
+        if(this.isSaveRequired(saveCandidate)) {
+            final File targetFile = new File(this.outputFileName);
             try {
                 // Ensure the directory structure exists
                 Files.createParentDirs(targetFile);
                 FileOutputStream finalOut = new FileOutputStream(targetFile);
-                finalOut.write(this.out.toByteArray());
+                finalOut.write(saveCandidate);
                 finalOut.flush();
                 Closeables.close(finalOut, true);
                 return true;
