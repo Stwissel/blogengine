@@ -8,4 +8,7 @@ dependency-reduced-pom.xml
 buildNumber.properties
 .mvn/timing.properties
 .settings
+.classpath
+.project
 # Storage for config
+BlogEngineConfig.json
