@@ -59,7 +59,7 @@ public class YamlTest {
         String fileName = "/Users/swissel/Blog/blogsource/src/documents/2018/03/some-wild-test.blog";
         File blogFile = new File(fileName);
         FileInputStream in = new FileInputStream(blogFile);
-        BlogEntry be = BlogEntry.loadDataFromBlog(in, Config.get(Config.CONFIG_NAME));
+        BlogEntry be = BlogEntry.loadDataFromBlog(in);
         
         in.close();
         final DumperOptions options = new DumperOptions();
@@ -70,7 +70,7 @@ public class YamlTest {
         final PrintStream pw = System.out;
         final Yaml yaml = new Yaml(options);
         pw.println(yaml.dumpAs(be.asMap(), Tag.MAP, FlowStyle.BLOCK));
-        pw.println(Config.get(Config.CONFIG_NAME).MARKDOW_SEPARATOR);
+        pw.println(BlogEntry.MARKDOW_SEPARATOR);
         
     }
 
@@ -91,8 +91,8 @@ public class YamlTest {
         while (iter.hasNext()) {
             final BlogEntry be = iter.next();
              pw.println(yaml.dumpAs(be.asMap(), Tag.MAP, FlowStyle.BLOCK));
-            pw.println(config.MARKDOW_SEPARATOR);
-            pw.println(Files.asCharSource(new File(be.sourceFileName), Charsets.UTF_8).read());
+            pw.println(BlogEntry.MARKDOW_SEPARATOR);
+            //FIXME: pw.println(Files.asCharSource(new File(be.sourceFileName), Charsets.UTF_8).read());
         }
 
     }

@@ -62,7 +62,7 @@ public class Config {
 		}
 	}
 
-	public static String CONFIG_NAME = "BlogRenderConfig.json";
+	public static String CONFIG_NAME = "BlogEngineConfig.json";
 
 	public static Config get() {
 		return ConfigHolder.getInstance(null);
@@ -101,7 +101,6 @@ public class Config {
 	public String IMPRINT_TEMPLATE = "imprint.mustache";
 
 	public String SERIES_TEMPLATE = "series.mustache";
-	public String MARKDOW_SEPARATOR = "---";
 	// Disk locations
 	public String sourceDirectory = "/home/stw/Documents/Projects/wisselblog/src/";
 	public String templateDirectory = "/home/stw/Documents/Projects/wisselblog/src/layouts/";
