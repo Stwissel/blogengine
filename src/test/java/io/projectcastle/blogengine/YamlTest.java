@@ -32,9 +32,6 @@ import org.yaml.snakeyaml.DumperOptions.FlowStyle;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.nodes.Tag;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Files;
-
 import io.projectcastle.blogengine.BlogEntry;
 import io.projectcastle.blogengine.BlogEngine;
 import io.projectcastle.blogengine.Config;
@@ -76,7 +73,7 @@ public class YamlTest {
 
     private void test1() throws IOException {
 
-        final Config config = Config.get(Config.CONFIG_NAME);
+        final Config config = Config.get(Config.CONFIG_NAME, false);
         final BlogEngine br = new BlogEngine(config);
         br.loadBlogFromDisk();
         final DumperOptions options = new DumperOptions();

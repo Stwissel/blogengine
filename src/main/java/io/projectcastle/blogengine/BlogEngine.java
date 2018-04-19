@@ -40,9 +40,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.joda.time.Duration;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
 
 import com.github.mustachejava.DefaultMustacheFactory;
 import com.github.mustachejava.Mustache;
@@ -57,8 +54,8 @@ import io.projectcastle.blogengine.EntriesWithFiles.FileEntry;
 public class BlogEngine {
 
     private final static String ALL_CATEGORY_NAME = "allCategories";
-    private final static String ALL_ENTRY_NAME = "allEntries";
-    private final static String BLOG_EXTENSION = ".blog";
+    private final static String ALL_ENTRY_NAME    = "allEntries";
+    private final static String BLOG_EXTENSION    = ".blog";
 
     /**
      * @param args
@@ -69,7 +66,8 @@ public class BlogEngine {
         final Date start = new Date();
         // ALL Parameters are in the config object which reads/writes
         // configuration from JSON
-        final BlogEngine blogEngine = new BlogEngine(Config.get(Config.CONFIG_NAME));
+        // If we have any command line arguments we save back the config
+        final BlogEngine blogEngine = new BlogEngine(Config.get(Config.CONFIG_NAME,(args.length > 0)));
 
         System.out.println("\n\n *************** Loading Blog from disk ********************\n\n");
         blogEngine.loadBlogFromDisk();
@@ -82,22 +80,15 @@ public class BlogEngine {
 
     }
 
-    private final TreeMap<String, LinkItem> allCategories = new TreeMap<String, LinkItem>();
-
-    private final TreeMap<String, LinkItem> allDateCategories = new TreeMap<String, LinkItem>();
-
-    private final TreeMap<String, TreeMap<String, LinkItem>> allSeries = new TreeMap<String, TreeMap<String, LinkItem>>();
-
-    private final TreeSet<BlogEntry> theBlog = new TreeSet<BlogEntry>();
-
-    private final Map<String, BlogEntry> blogById = new HashMap<>();
-
-    private Config config = null;
-
-    private EntriesWithFiles fileEntries = new EntriesWithFiles();
-
-    private EntriesWithFiles                          imgEntries    = new EntriesWithFiles();
-    private final TreeMap<String, RenderInstructions> overviewPages = new TreeMap<String, RenderInstructions>();
+    private final TreeMap<String, LinkItem>                  allCategories     = new TreeMap<String, LinkItem>();
+    private final TreeMap<String, LinkItem>                  allDateCategories = new TreeMap<String, LinkItem>();
+    private final TreeMap<String, TreeMap<String, LinkItem>> allSeries         = new TreeMap<String, TreeMap<String, LinkItem>>();
+    private final TreeSet<BlogEntry>                         theBlog           = new TreeSet<BlogEntry>();
+    private final Map<String, BlogEntry>                     blogById          = new HashMap<>();
+    private final Config                                     config;
+    private EntriesWithFiles                                 fileEntries       = new EntriesWithFiles();
+    private EntriesWithFiles                                 imgEntries        = new EntriesWithFiles();
+    private final TreeMap<String, RenderInstructions>        overviewPages     = new TreeMap<String, RenderInstructions>();
     // for rendering and lookup of old/new URLs
     private final TreeMap<String, String> mapperOldNewURLs = new TreeMap<String, String>();
 
@@ -149,14 +140,14 @@ public class BlogEngine {
      * @param sourceFileOrDirName
      * @throws IOException
      */
-    public void loadBlogFromDisk() throws IOException {
+    public Set<BlogEntry> loadBlogFromDisk() throws IOException {
         final File srcDir = new File(this.config.sourceDirectory);
         if (!srcDir.exists()) {
             System.err.print(this.config.sourceDirectory + " doesn't exist!");
-            return;
+            return null;
         } else if (!srcDir.isDirectory()) {
             System.err.print(this.config.sourceDirectory + " is not a directory!");
-            return;
+            return null;
         }
 
         final String path = srcDir.getPath();
@@ -167,8 +158,7 @@ public class BlogEngine {
         System.out.println("\nComments loaded from disk");
         this.loadFileDefinitionsFromDisk(path);
         System.out.println("\n\nFile definitions loaded from disk");
-        this.cleanupLinksAndImages();
-        System.out.println("\n\nCleanup complete");
+        return this.getTheBlog();
 
     }
 
@@ -196,9 +186,7 @@ public class BlogEngine {
                     System.err.println("Can't find parent:" + parent);
                 }
             }
-
         }
-
     }
 
     /**
@@ -270,18 +258,17 @@ public class BlogEngine {
                 this.allSeries.put(series, c);
             }
 
-            // System.out.println(be.getEntryUrl());
         }
     }
 
-    private void addToOverviewPage(final String type, final String title, final String key, final BlogEntry be) {
+    private void addToOverviewPage(final String type, final String title, final String key, final BlogEntry blogEntry) {
         RenderInstructions ri;
         String templateName;
         String outfileName;
         String pageTitle;
         String pageLink;
 
-        if (be == null) {
+        if (blogEntry == null) {
             return;
         }
 
@@ -299,7 +286,7 @@ public class BlogEngine {
         } else if (type.equals("yearmonth")) {
             templateName = this.config.MONTH_TEMPLATE;
             outfileName = key + "/" + this.config.indexFileName;
-            pageTitle = "By Date: " + be.getPublishDateStringShort();
+            pageTitle = "By Date: " + blogEntry.getPublishDateStringShort();
             pageLink = key;
         } else {
             // We dont know the type
@@ -321,9 +308,9 @@ public class BlogEngine {
 
         // In year we want to subcategorize with month
         if (type.equals("year")) {
-            ri.addToCategory(be, be.getDateMonth(), be.getDateMonthNumber());
+            ri.addToCategory(blogEntry, blogEntry.getDateMonth(), blogEntry.getDateMonthNumber());
         } else {
-            ri.add(be);
+            ri.add(blogEntry);
         }
     }
 
@@ -349,60 +336,13 @@ public class BlogEngine {
         return result.toString();
     }
 
-    private String cleanupHTMLlinksAndImages(final String source, final String location) {
-
-        final org.jsoup.nodes.Document hDoc = Jsoup.parse(source);
-        this.cleanupTagUrlAttribute(hDoc, "img", "src", location);
-        this.cleanupTagUrlAttribute(hDoc, "a", "href", location);
-        return hDoc.body().html();
-
-    }
-
-    /**
-     * Goes through all Blog entries and sorts out the links to images and
-     * attachments by looking at src and href attributes
-     */
-    private void cleanupLinksAndImages() {
-        for (final BlogEntry be : this.theBlog) {
-            this.cleanupOneBlogEntry(be);
-        }
-        System.out.println("Completed mapping of Blog entries");
-    }
-
-    private void cleanupOneBlogEntry(final BlogEntry be) {
-        be.setMainBody(this.cleanupHTMLlinksAndImages(be.getMainBody(), be.getEntryUrl()));
-        if ((be.getMoreBody() != null) && !be.getMoreBody().equals("")) {
-            be.setMoreBody(this.cleanupHTMLlinksAndImages(be.getMoreBody(), be.getEntryUrl()));
-        }
-    }
-
-    private void cleanupTagUrlAttribute(final org.jsoup.nodes.Document hDoc, final String elementName,
-            final String attName, final String location) {
-
-        final String query = elementName + "[" + attName + "]";
-        final Elements elements = hDoc.select(query);
-
-        for (final Element element : elements) {
-            final String attValue = element.attr(attName).trim();
-            if (this.mapperOldNewURLs.containsKey(attValue.toLowerCase())) {
-                final String replace = this.mapperOldNewURLs.get(attValue.toLowerCase());
-                System.out.print("Replacing:");
-                System.out.print(attValue);
-                System.out.print(" with ");
-                System.out.println(replace);
-                element.attr(attName, replace);
-            }
-        }
-
-    }
-    
     private void retrieveBlogFilesFromDisk(final String sourceFileOrDirName, final Collection<File> blogFileList) {
         final File fileCandidate = new File(sourceFileOrDirName);
         if (!fileCandidate.exists()) {
             System.err.print(sourceFileOrDirName + " doesn't exist");
             return;
         }
-        
+
         if (fileCandidate.isDirectory()) {
             System.out.println(fileCandidate.getAbsolutePath());
             // Recursive call to get files in directory structure
@@ -412,8 +352,8 @@ public class BlogEngine {
 
         } else if (fileCandidate.getName().endsWith(BLOG_EXTENSION)) {
             blogFileList.add(fileCandidate);
-         
-        }        
+
+        }
     }
 
     /**
@@ -428,10 +368,10 @@ public class BlogEngine {
             System.err.print(sourceDirName + " doesn't exist");
             return;
         }
-        
+
         Collection<File> blogFileList = new ArrayList<>();
         this.retrieveBlogFilesFromDisk(sourceDirName, blogFileList);
-        
+
         blogFileList.forEach(blogfile -> {
             BlogEntry be = null;
             try {
@@ -482,14 +422,7 @@ public class BlogEngine {
         bi.allCategories = this.allCategories.values();
         bi.allDateCategories = this.allDateCategories.values();
         bi.topArticles = new BlogEntryCollection(true);
-        final Iterator<BlogEntry> it = this.theBlog.iterator();
-
-        while (it.hasNext()) {
-            final BlogEntry cur = it.next();
-            if (cur.getStatus().equals("Published")) {
-                bi.topArticles.add(cur);
-            }
-        }
+        bi.topArticles.addAll(this.theBlog);
 
         this.renderToDisk(template, finalDestination, bi);
         System.out.println("Rendered 404");
@@ -516,16 +449,40 @@ public class BlogEngine {
      */
     private void renderBlog() throws IOException {
         final String template = this.config.ENTRY_TEMPLATE;
-        final String baseDir = this.config.webBlogLocation;
         final BlogIndex seriesIndex = new BlogIndex();
-        seriesIndex.topArticles = new BlogEntryCollection(true);
-        final Set<String> completedSeries = new HashSet<String>();
         final MustacheFactory mf = new DefaultMustacheFactory(new File(this.config.templateDirectory));
         final Mustache mustache = mf.compile(template);
 
+        this.prepareBlogEntriesWithPrevNextSeries(seriesIndex);
+
+        this.theBlog.forEach(renderEntry -> {
+            this.renderOneEntry(renderEntry, mustache);
+        });
+
+        System.out.println("\nEntries completed, now categories & dates\n");
+
+        // Categories & Date Categories !!
+        this.renderOverViewPages();
+        this.renderAttachments();
+        this.renderIndex();
+        this.renderIndexRSS();
+        this.render404();
+        this.renderSeries(seriesIndex);
+        this.renderImprint();
+        this.renderURLMapper();
+        this.renderNGinxURLMapper();
+
+        System.out.println("...Done...");
+    }
+
+    private void prepareBlogEntriesWithPrevNextSeries(BlogIndex seriesIndex) {
+        final String baseDir = this.config.webBlogLocation;
+        seriesIndex.topArticles = new BlogEntryCollection(true);
+        final Set<String> completedSeries = new HashSet<String>();
+        // The previously rendered entry
         BlogEntry renderEntry = null;
 
-        // Blog entries
+        // Prepare Blog entries with previous and next entries as well as Series
         for (final BlogEntry be : this.theBlog) {
             be.cleanupComments();
             be.setAllCategories(this.allCategories.values());
@@ -550,33 +507,12 @@ public class BlogEngine {
             // needs its nextLink populated by be and be needs its previousLink
             // populated by renderentry
             if (renderEntry != null) {
-                if (be.getStatus().equals("Published")) {
-                    renderEntry.setNextItem(be.getLinkItem(baseDir));
-                }
+                renderEntry.setNextItem(be.getLinkItem(baseDir));
                 be.setPreviousItem(renderEntry.getLinkItem(baseDir));
-                this.renderOneEntry(renderEntry, mustache);
             }
 
             renderEntry = be;
         }
-
-        // The last entry wasn't rendered in the loop, so we do it here!
-        this.renderOneEntry(renderEntry, mustache);
-
-        System.out.println("\nEntries completed, now categories & dates\n");
-
-        // Categories & Date Categories !!
-        this.renderOverViewPages();
-        this.renderAttachments();
-        this.renderIndex();
-        this.renderIndexRSS();
-        this.render404();
-        this.renderSeries(seriesIndex);
-        this.renderImprint();
-        this.renderURLMapper();
-        this.renderNGinxURLMapper();
-
-        System.out.println("...Done...");
     }
 
     private void renderImprint() throws IOException {
@@ -594,10 +530,9 @@ public class BlogEngine {
 
         while (it.hasNext() && (i < max)) {
             final BlogEntry cur = it.next();
-            if (cur.getStatus().equals("Published")) {
-                bi.topArticles.add(cur);
-                i++;
-            }
+
+            bi.topArticles.add(cur);
+            i++;
         }
 
         this.renderToDisk(template, finalDestination, bi);
@@ -614,7 +549,7 @@ public class BlogEngine {
         bi.allCategories = this.allCategories.values();
         bi.allDateCategories = this.allDateCategories.values();
         bi.topArticles = new BlogEntryCollection(true);
-        final int max = 10;
+        final int max = this.config.entriesOnFrontPage;
         int i = 0;
         final Iterator<BlogEntry> it = this.theBlog.descendingIterator();
 
@@ -638,16 +573,14 @@ public class BlogEngine {
         bi.allCategories = this.allCategories.values();
         bi.allDateCategories = this.allDateCategories.values();
         bi.topArticles = new BlogEntryCollection(true);
-        final int max = 10;
+        final int max = this.config.entriesInRSS;
         int i = 0;
         final Iterator<BlogEntry> it = this.theBlog.descendingIterator();
 
         while (it.hasNext() && (i < max)) {
             final BlogEntry cur = it.next();
-            if (cur.getStatus().equals("Published")) {
                 bi.topArticles.add(cur);
                 i++;
-            }
         }
 
         final RSSFeedWriter rss = new RSSFeedWriter(this.getConfig(), bi);
@@ -704,6 +637,8 @@ public class BlogEngine {
 
     private void renderOneEntry(final BlogEntry be, final Mustache mustache) {
 
+        //TODO: remove dependency on this.allCategories and this.allSeries and this.allDateCategories
+        
         final String location = this.config.destinationDirectory + be.getEntryUrl();
 
         // Set the current context

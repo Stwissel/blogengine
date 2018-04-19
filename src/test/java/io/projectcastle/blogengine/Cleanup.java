@@ -38,7 +38,7 @@ public class Cleanup {
     private final Collection<String> deleteEntries = new ArrayList<>();
     
     private void go() {
-        final Config config = Config.get(Config.CONFIG_NAME);
+        final Config config = Config.get(Config.CONFIG_NAME, false);
         this.cleanDirectory(config.sourceDirectory + "/" + config.documentDirectory);
         
     }

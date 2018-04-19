@@ -42,22 +42,23 @@ public class Config {
 	private static class ConfigHolder {
 		private static Config INSTANCE = null;
 
-		public static final Config getInstance(final String path) {
-			if (ConfigHolder.INSTANCE == null) {
-				final File configFile;
-				if (path != null) {
-					configFile = new File(path);
-				} else {
-					configFile = new File(Config.CONFIG_NAME);
-				}
+		public static final Config getInstance(final String path, boolean forceSave) {
+		    final File configFile = new File((path != null) ? path : Config.CONFIG_NAME);
+		    if (ConfigHolder.INSTANCE == null) {				
+				
 				if (configFile.exists()) {
 					ConfigHolder.INSTANCE = Config.load(configFile);
 				} else {
 					ConfigHolder.INSTANCE = new Config();
-					// We save so we have a parameter file later on
-					ConfigHolder.INSTANCE.save(configFile);
+					forceSave = true;
 				}
+				
 			}
+			
+            if (forceSave) {
+                // We save so we have a parameter file later on
+                ConfigHolder.INSTANCE.save(configFile);
+            }
 			return ConfigHolder.INSTANCE;
 		}
 	}
@@ -65,12 +66,14 @@ public class Config {
 	public static String CONFIG_NAME = "BlogEngineConfig.json";
 
 	public static Config get() {
-		return ConfigHolder.getInstance(null);
+		return ConfigHolder.getInstance(null, false);
 	}
 
-	public static Config get(final String path) {
-		return ConfigHolder.getInstance(path);
+	public static Config get(final String path, boolean forceSave) {
+		return ConfigHolder.getInstance(path, forceSave);
 	}
+
+    private String filePath;
 
 	private static Config load(final File destination) {
 		Config result = null;
@@ -80,11 +83,18 @@ public class Config {
 			final FileInputStream in = new FileInputStream(destination);
 			final Gson gson = new GsonBuilder().create();
 			result = gson.fromJson(new InputStreamReader(in), Config.class);
+			result.filePath = destination.getAbsolutePath();
 			in.close();
 		} catch (final IOException e) {
 			e.printStackTrace();
 		}
 		return result;
+	}
+	
+	public static Config save() {
+	    Config c = get();
+	    c.save(new File(c.filePath));
+	    return c;
 	}
 
 	// Templates
@@ -132,15 +142,15 @@ public class Config {
 	public String bloghost = "wissel.net";
 	// RSS Properties
 	public String copyRight = "(C) 2003 - 2018 Stephan H. Wissel, All rights reserved";
-
 	public String language = "en,de";
-
 	public String rssDescription = "Thoughts, Insights and Opinions of Stephan H. Wissel. Topics included: IBM Lotus Notes and Domino, IBM Websphere, other IBM Lotus stuff,  J2EE, .Net, Software Archtecture, Personcentric Development, Agile Software, SDLC, Singapore and my Twins";
-
 	public String rssLink = "https://wissel.net/blog/stories.rss";
-
 	public String rssTitle = "wissel.net Usability - Productivity - Business - The web - Singapore and Twins";
 
+	public int entriesOnFrontPage = 10;
+	public int entriesInRSS = 20;
+	public int entriesOnImprint = 5;
+	
 	private Config() {
 		// Hide the constructor, so there can only be
 		// one instance of the class
